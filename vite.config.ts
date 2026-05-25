@@ -1,11 +1,17 @@
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
-import { VitePWA } from 'vite-plugin-pwa'
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+import { VitePWA } from 'vite-plugin-pwa';
+import path from 'path';
 
 // https://vitejs.dev/config/
 export default defineConfig({
   // Replace 'grocery-billing' with your actual GitHub repo name
   base: '/grocery-billing/',
+  resolve: {
+    alias: {
+      '@': path.resolve(__dirname, './src'),
+    },
+  },
   plugins: [
     react(),
     VitePWA({
@@ -25,20 +31,20 @@ export default defineConfig({
           {
             src: 'pwa-192x192.png',
             sizes: '192x192',
-            type: 'image/png'
-          },
-          {
-            src: 'pwa-512x512.png',
-            sizes: '512x512',
-            type: 'image/png'
+            type: 'image/png',
           },
           {
             src: 'pwa-512x512.png',
             sizes: '512x512',
             type: 'image/png',
-            purpose: 'any maskable'
-          }
-        ]
+          },
+          {
+            src: 'pwa-512x512.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'any maskable',
+          },
+        ],
       },
       workbox: {
         // Cache all build assets
@@ -51,19 +57,19 @@ export default defineConfig({
             options: {
               cacheName: 'firestore-cache',
               networkTimeoutSeconds: 5,
-              expiration: { maxEntries: 100, maxAgeSeconds: 86400 }
-            }
+              expiration: { maxEntries: 100, maxAgeSeconds: 86400 },
+            },
           },
           {
             urlPattern: /^https:\/\/res\.cloudinary\.com\/.*/i,
             handler: 'CacheFirst',
             options: {
               cacheName: 'cloudinary-images',
-              expiration: { maxEntries: 200, maxAgeSeconds: 604800 }
-            }
-          }
-        ]
-      }
-    })
-  ]
-})
+              expiration: { maxEntries: 200, maxAgeSeconds: 604800 },
+            },
+          },
+        ],
+      },
+    }),
+  ],
+});

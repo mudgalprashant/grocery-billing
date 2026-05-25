@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
 import { authService } from '@/services'
+import { getMagicLinkEmail } from '@/services/firebase/FirebaseAuthService'
 import type { AppUser } from '@/types'
 
 interface AuthContextValue {
@@ -17,6 +18,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    // Handle magic link redirect — check on every app load
+    if (authService.isMagicLinkUrl()) {
+      const email = getMagicLinkEmail()
+      if (email) {
+        authService.completeMagicLinkSignIn(email).then(result => {
+          if (result.success && result.data) setUser(result.data)
+          setLoading(false)
+        })
+        return
+      }
+    }
+
+    // Normal auth state listener
     const unsubscribe = authService.onAuthStateChanged((u) => {
       setUser(u)
       setLoading(false)

@@ -9,90 +9,98 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function getUser() {
+    function getUserData() {
       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
     }
 
-    function hasRole(role) {
-      return isSignedIn() && getUser().role == role;
+    function userExists() {
+      return isSignedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid));
     }
 
     function isAdmin() {
-      return hasRole('admin');
+      return userExists() && getUserData().role == 'admin';
     }
 
     function isCashier() {
-      return hasRole('cashier') || isAdmin();
+      return userExists() && (getUserData().role == 'cashier' || getUserData().role == 'admin');
     }
 
-    function isActive() {
-      return isSignedIn() && getUser().isActive == true;
+    function isActiveUser() {
+      return userExists() && getUserData().isActive == true;
     }
 
     // ── Users ─────────────────────────────────────────────────────────────────
-    // Users can read their own profile.
-    // Admins can read all profiles and update roles.
-    // New users can create their own profile on first sign-in.
 
     match /users/{uid} {
-      allow read: if isSignedIn() && (request.auth.uid == uid || isAdmin());
+      // Anyone signed in can read their own profile
+      allow read: if isSignedIn() && request.auth.uid == uid;
+      // Admins can read all profiles
+      allow read: if isAdmin();
+      // A signed-in user can create ONLY their own profile
       allow create: if isSignedIn() && request.auth.uid == uid;
+      // User can update their own non-sensitive fields; admin can update anything
       allow update: if isSignedIn() && (
-        // User updating their own non-sensitive fields
         (request.auth.uid == uid && !('role' in request.resource.data.diff(resource.data).affectedKeys()))
-        // Admin updating anything
         || isAdmin()
       );
-      allow delete: if false; // Never hard-delete users
+      allow delete: if false;
+    }
+
+    // ── Invite codes ──────────────────────────────────────────────────────────
+    // Used for manual registration flow — admin creates, new user reads once
+
+    match /inviteCodes/{code} {
+      // Anyone signed in can read a code to validate it
+      allow read: if isSignedIn();
+      // Only admins can create/delete codes
+      allow create, delete: if isAdmin();
+      allow update: if false;
     }
 
     // ── Products ──────────────────────────────────────────────────────────────
-    // All authenticated active users can read products.
-    // Only admins can create/update/delete.
 
     match /products/{productId} {
-      allow read: if isActive();
-      allow create, update, delete: if isActive() && isAdmin();
+      allow read: if isActiveUser();
+      allow create, update, delete: if isActiveUser() && isAdmin();
     }
 
     // ── Bills ─────────────────────────────────────────────────────────────────
-    // Cashiers and admins can create bills.
-    // Customers can read bills linked to their UID.
-    // Admins and cashiers can read all bills.
-    // Only admins can update bill status.
 
     match /bills/{billId} {
-      allow read: if isActive() && (
+      allow read: if isActiveUser() && (
         isCashier()
         || resource.data.customerId == request.auth.uid
       );
-      allow create: if isActive() && isCashier();
-      allow update: if isActive() && isAdmin();
+      allow create: if isActiveUser() && isCashier();
+      allow update: if isActiveUser() && isAdmin();
       allow delete: if false;
     }
 
     // ── Payments ──────────────────────────────────────────────────────────────
-    // Any active user can register a payment.
-    // Customers can read payments on their own bills.
-    // Cashiers/admins can read all payments.
-    // Only admins can approve/reject (update status).
 
     match /payments/{paymentId} {
-      allow read: if isActive() && (
+      allow read: if isActiveUser() && (
         isCashier()
         || resource.data.registeredByUserId == request.auth.uid
       );
-      allow create: if isActive();
-      allow update: if isActive() && isAdmin();
+      allow create: if isActiveUser();
+      allow update: if isActiveUser() && isAdmin();
       allow delete: if false;
     }
 
+    // ── Meta ─────────────────────────────────────────────────────────────────
+    // App-wide sentinel docs (e.g. admin_exists flag)
+    // Any signed-in user can read; only cashiers/admins can write (via upsert)
+
+    match /meta/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+
     // ── Counters ──────────────────────────────────────────────────────────────
-    // Only used server-side via transactions for bill number generation.
-    // Cashiers and admins can read/write (needed for transaction).
 
     match /counters/{counterId} {
-      allow read, write: if isActive() && isCashier();
+      allow read, write: if isActiveUser() && isCashier();
     }
   }
 }
