@@ -1,0 +1,35 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  html {
+    /* Prevent font scaling on orientation change in iOS */
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    @apply font-sans text-ink bg-surface-muted;
+    /* Safe area insets for notched phones */
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  /* Smooth scrolling within panels */
+  .overflow-y-auto {
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+@layer utilities {
+  /* Hide scrollbar but keep scroll functionality */
+  .scrollbar-none {
+    scrollbar-width: none;
+  }
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
+}
