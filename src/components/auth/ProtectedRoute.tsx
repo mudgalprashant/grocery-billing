@@ -9,13 +9,8 @@ interface ProtectedRouteProps {
   allowedRoles?: UserRole[]
 }
 
-/**
- * ProtectedRoute — Single Responsibility: route access control only.
- * Redirects unauthenticated users to /login.
- * Redirects unauthorized roles to /dashboard.
- */
 export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) {
-  const { user, loading } = useAuth()
+  const { user, loading, isAdmin, isStore, isCashier } = useAuth()
 
   if (loading) {
     return (
@@ -26,6 +21,11 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
   }
 
   if (!user) return <Navigate to="/login" replace />
+
+  // Cashiers and store managers without a storeId can't do anything useful
+  if (!isAdmin && (isStore || isCashier) && !user.storeId) {
+    return <Navigate to="/no-store" replace />
+  }
 
   if (allowedRoles && !allowedRoles.includes(user.role)) {
     return <Navigate to="/dashboard" replace />

@@ -1,49 +1,82 @@
-import type { ReactNode } from 'react'
-import { NavLink } from 'react-router-dom'
-import { ShoppingCart, Package, ReceiptText, BarChart3, Users, Bell } from 'lucide-react'
-import { useAuth } from '@/context/AuthContext'
-import { useCart } from '@/context/CartContext'
+import type { ReactNode } from 'react';
+import { NavLink } from 'react-router-dom';
+import {
+  ShoppingCart,
+  Package,
+  ReceiptText,
+  BarChart3,
+  Users,
+  Bell,
+  Store,
+} from 'lucide-react';
+import { useAuth } from '@/context/AuthContext';
+import { useCart } from '@/context/CartContext';
 
-interface AppShellProps { children: ReactNode }
+interface AppShellProps {
+  children: ReactNode;
+}
 
 export function AppShell({ children }: AppShellProps) {
-  const { user, isAdmin, isCustomer } = useAuth()
-  const { itemCount } = useCart()
+  const { user, isAdmin, isStore, isCustomer } = useAuth();
+  const { itemCount } = useCart();
 
   const navItems = [
-    ...(isCustomer ? [] : [
-      { to: '/billing', icon: ShoppingCart, label: 'Billing', badge: itemCount > 0 ? itemCount : null },
-      { to: '/products', icon: Package, label: 'Products' },
-    ]),
+    // Billing — cashiers, store managers, admins
+    ...(!isCustomer
+      ? [
+          {
+            to: '/billing',
+            icon: ShoppingCart,
+            label: 'Billing',
+            badge: itemCount > 0 ? itemCount : null,
+          },
+          { to: '/products', icon: Package, label: 'Products' },
+        ]
+      : []),
     { to: '/bills', icon: ReceiptText, label: 'Bills' },
-    ...(isAdmin ? [
-      { to: '/reports', icon: BarChart3, label: 'Reports' },
-      { to: '/payments/pending', icon: Bell, label: 'Approvals' },
-      { to: '/users', icon: Users, label: 'Users' },
-    ] : []),
-  ]
+    // Reports + approvals — store managers and admins
+    ...(isAdmin || isStore
+      ? [
+          { to: '/reports', icon: BarChart3, label: 'Reports' },
+          { to: '/payments/pending', icon: Bell, label: 'Approvals' },
+        ]
+      : []),
+    // Users + Stores — admin only
+    ...(isAdmin
+      ? [
+          { to: '/stores', icon: Store, label: 'Stores' },
+          { to: '/users', icon: Users, label: 'Users' },
+        ]
+      : []),
+  ];
 
   return (
     <div className="min-h-screen bg-surface-muted flex flex-col max-w-md mx-auto">
-      {/* Top bar */}
       <header className="bg-white border-b border-surface-border px-4 py-3 flex items-center justify-between sticky top-0 z-10">
         <div>
-          <h1 className="font-semibold text-ink text-base leading-tight">Grocery Billing</h1>
-          <p className="text-xs text-ink-muted capitalize">{user?.role} · {user?.displayName}</p>
+          <h1 className="font-semibold text-ink text-base leading-tight">
+            Grocery Billing
+          </h1>
+          <p className="text-xs text-ink-muted capitalize">
+            {user?.role === 'store' ? 'Store Manager' : user?.role} ·{' '}
+            {user?.displayName}
+          </p>
         </div>
-        <img
-          src={user?.photoURL ?? undefined}
-          alt={user?.displayName}
-          className="w-8 h-8 rounded-full bg-surface-border"
-        />
+        {user?.photoURL ? (
+          <img
+            src={user.photoURL}
+            alt={user.displayName}
+            className="w-8 h-8 rounded-full bg-surface-border"
+          />
+        ) : (
+          <div className="w-8 h-8 rounded-full bg-primary-100 flex items-center justify-center text-primary-700 text-xs font-bold">
+            {user?.displayName?.charAt(0).toUpperCase()}
+          </div>
+        )}
       </header>
 
-      {/* Page content */}
-      <main className="flex-1 overflow-y-auto pb-20">
-        {children}
-      </main>
+      <main className="flex-1 overflow-y-auto pb-20">{children}</main>
 
-      {/* Bottom nav */}
       <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md bg-white border-t border-surface-border z-10">
         <div className="flex">
           {navItems.map(({ to, icon: Icon, label, badge }) => (
@@ -69,5 +102,5 @@ export function AppShell({ children }: AppShellProps) {
         </div>
       </nav>
     </div>
-  )
+  );
 }

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { X, ImagePlus } from 'lucide-react'
 import { useProducts, useStorage } from '@/hooks'
+import { useAuth } from '@/context/AuthContext'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui'
 import type { Product, ProductUnit } from '@/types'
@@ -16,10 +17,12 @@ interface Props {
 }
 
 export function ProductFormModal({ product, onClose, onSaved }: Props) {
-  const { create, update } = useProducts()
+  const { storeId } = useAuth()
+  const { create, update } = useProducts(storeId)
   const { upload, uploading } = useStorage()
 
   const [name, setName] = useState(product?.name ?? '')
+  const [description, setDescription] = useState(product?.description ?? '')
   const [price, setPrice] = useState(String(product?.price ?? ''))
   const [unit, setUnit] = useState<ProductUnit>(product?.unit ?? 'piece')
   const [category, setCategory] = useState(product?.category ?? CATEGORIES[0])
@@ -35,19 +38,26 @@ export function ProductFormModal({ product, onClose, onSaved }: Props) {
   }
 
   const handleSave = async () => {
-    if (!name.trim() || !price) return toast.error('Fill in all required fields')
+    if (!name.trim()) return toast.error('Product name is required')
     const priceNum = parseFloat(price)
     if (isNaN(priceNum) || priceNum <= 0) return toast.error('Enter a valid price')
 
     setSaving(true)
-    const input = { name: name.trim(), price: priceNum, unit, category, imageUrl, isActive: true }
+    const input = {
+      name: name.trim(),
+      description: description.trim() || null,
+      price: priceNum,
+      unit,
+      category,
+      imageUrl,
+      isActive: true,
+    }
 
     const result = product
       ? await update(product.id, input)
       : await create(input)
 
     setSaving(false)
-
     if (result.success) {
       toast.success(product ? 'Product updated' : 'Product added')
       onSaved()
@@ -68,7 +78,7 @@ export function ProductFormModal({ product, onClose, onSaved }: Props) {
         </div>
 
         <div className="flex flex-col gap-4">
-          {/* Image upload */}
+          {/* Image */}
           <div>
             <label className="text-sm font-medium text-ink block mb-1">Photo (optional)</label>
             <div className="flex items-center gap-3">
@@ -86,9 +96,36 @@ export function ProductFormModal({ product, onClose, onSaved }: Props) {
             </div>
           </div>
 
-          <Input label="Product name *" value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Basmati Rice" />
+          <Input
+            label="Product name *"
+            value={name}
+            onChange={e => setName(e.target.value)}
+            placeholder="e.g. Basmati Rice"
+          />
 
-          <Input label="Price (₹) *" type="number" min="0" step="0.01" value={price} onChange={e => setPrice(e.target.value)} placeholder="e.g. 120" />
+          <div>
+            <label className="text-sm font-medium text-ink block mb-1">Description (optional)</label>
+            <textarea
+              value={description}
+              onChange={e => setDescription(e.target.value)}
+              placeholder="e.g. Long grain aged basmati, 1kg pack. Good for biryani."
+              rows={2}
+              className="w-full px-3 py-2.5 rounded-xl border border-surface-border text-sm text-ink
+                placeholder:text-ink-faint focus:outline-none focus:border-primary-600
+                focus:ring-2 focus:ring-primary-600/20 transition-colors resize-none"
+            />
+            <p className="text-xs text-ink-faint mt-1">Helps with search — include brand, variety, use-case</p>
+          </div>
+
+          <Input
+            label="Price (₹) *"
+            type="number"
+            min="0"
+            step="0.01"
+            value={price}
+            onChange={e => setPrice(e.target.value)}
+            placeholder="e.g. 120"
+          />
 
           <div>
             <label className="text-sm font-medium text-ink block mb-1">Unit *</label>

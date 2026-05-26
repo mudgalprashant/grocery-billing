@@ -21,7 +21,6 @@ export class FirebaseUserService implements IUserService {
       const snap = await getDoc(ref);
 
       if (snap.exists()) {
-        // User exists — preserve role, update display info only
         const existing = snap.data() as AppUser;
         const updated: AppUser = {
           ...existing,
@@ -35,20 +34,17 @@ export class FirebaseUserService implements IUserService {
         return { success: true, data: updated };
       }
 
-      // New user — determine role.
-      // If a role is explicitly passed (e.g. from invite code), use it.
-      // Otherwise check if any admin exists in the DB.
-      // We use a separate lightweight "meta" doc to avoid reading all users.
+      // First user ever becomes global admin
       let role: UserRole = user.role ?? 'customer';
+      let storeId: string | null = user.storeId ?? null;
 
       if (!user.role) {
-        // Check if admin sentinel exists
         const adminSentinel = await getDoc(
           doc(db, COLLECTIONS.META, 'admin_exists'),
         );
         if (!adminSentinel.exists()) {
-          // First user ever — make them admin and record sentinel
           role = 'admin';
+          storeId = null;
           await setDoc(doc(db, COLLECTIONS.META, 'admin_exists'), {
             createdAt: new Date().toISOString(),
           });
@@ -61,6 +57,7 @@ export class FirebaseUserService implements IUserService {
         displayName: user.displayName,
         photoURL: user.photoURL,
         role,
+        storeId,
         isActive: true,
         createdAt: new Date().toISOString(),
       };
@@ -85,9 +82,8 @@ export class FirebaseUserService implements IUserService {
   async listUsers(): Promise<ServiceResult<AppUser[]>> {
     try {
       const snap = await getDocs(this.col);
-      // Filter out internal sentinel docs
       const users = snap.docs
-        .filter((d) => !d.id.startsWith('__'))
+        .filter((d) => !d.id.startsWith('meta_'))
         .map((d) => d.data() as AppUser);
       return { success: true, data: users };
     } catch (err) {
@@ -101,6 +97,18 @@ export class FirebaseUserService implements IUserService {
   ): Promise<ServiceResult<void>> {
     try {
       await updateDoc(doc(db, COLLECTIONS.USERS, uid), { role });
+      return { success: true, data: undefined };
+    } catch (err) {
+      return { success: false, error: (err as Error).message };
+    }
+  }
+
+  async updateUserStore(
+    uid: string,
+    storeId: string | null,
+  ): Promise<ServiceResult<void>> {
+    try {
+      await updateDoc(doc(db, COLLECTIONS.USERS, uid), { storeId });
       return { success: true, data: undefined };
     } catch (err) {
       return { success: false, error: (err as Error).message };

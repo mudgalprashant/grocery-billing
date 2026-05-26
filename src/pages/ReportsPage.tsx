@@ -1,29 +1,36 @@
-import { useEffect, useState } from 'react'
-import { BarChart3 } from 'lucide-react'
-import { billService } from '@/services'
-import { Card, Spinner, EmptyState } from '@/components/ui'
-import { formatCurrency, formatDate } from '@/utils/formatters'
-import { subDays, format } from 'date-fns'
-import type { DailySummary } from '@/types'
+import { useEffect, useState } from 'react';
+import { BarChart3 } from 'lucide-react';
+import { billService } from '@/services';
+import { Card, Spinner, EmptyState } from '@/components/ui';
+import { formatCurrency, formatDate } from '@/utils/formatters';
+import { subDays, format } from 'date-fns';
+import type { DailySummary } from '@/types';
 
 export function ReportsPage() {
-  const [summaries, setSummaries] = useState<DailySummary[]>([])
-  const [loading, setLoading] = useState(true)
-  const [range, setRange] = useState<'7' | '30' | '90'>('7')
+  const [summaries, setSummaries] = useState<DailySummary[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [range, setRange] = useState<'7' | '30' | '90'>('7');
 
   useEffect(() => {
     const load = async () => {
-      setLoading(true)
-      const days = parseInt(range)
-      const result = await billService.getDailySummary({
-        from: format(subDays(new Date(), days), 'yyyy-MM-dd') + 'T00:00:00.000Z',
+      setLoading(true);
+      const storeId = localStorage.getItem('storeId');
+      if (!storeId) {
+        setSummaries([]);
+        setLoading(false);
+        return;
+      }
+      const days = parseInt(range);
+      const result = await billService.getDailySummary(storeId, {
+        from:
+          format(subDays(new Date(), days), 'yyyy-MM-dd') + 'T00:00:00.000Z',
         to: new Date().toISOString(),
-      })
-      if (result.success) setSummaries(result.data)
-      setLoading(false)
-    }
-    load()
-  }, [range])
+      });
+      if (result.success) setSummaries(result.data);
+      setLoading(false);
+    };
+    load();
+  }, [range]);
 
   const totals = summaries.reduce(
     (acc, s) => ({
@@ -32,15 +39,15 @@ export function ReportsPage() {
       pending: acc.pending + s.totalPending,
       bills: acc.bills + s.totalBills,
     }),
-    { revenue: 0, collected: 0, pending: 0, bills: 0 }
-  )
+    { revenue: 0, collected: 0, pending: 0, bills: 0 },
+  );
 
   return (
     <div className="px-4 py-5">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-bold text-ink">Reports</h2>
         <div className="flex gap-1 bg-surface-muted rounded-xl p-1">
-          {(['7', '30', '90'] as const).map(d => (
+          {(['7', '30', '90'] as const).map((d) => (
             <button
               key={d}
               onClick={() => setRange(d)}
@@ -56,9 +63,21 @@ export function ReportsPage() {
       {/* Summary cards */}
       <div className="grid grid-cols-2 gap-3 mb-5">
         {[
-          { label: 'Revenue', value: formatCurrency(totals.revenue), color: 'text-primary-600' },
-          { label: 'Collected', value: formatCurrency(totals.collected), color: 'text-blue-600' },
-          { label: 'Pending', value: formatCurrency(totals.pending), color: 'text-warning' },
+          {
+            label: 'Revenue',
+            value: formatCurrency(totals.revenue),
+            color: 'text-primary-600',
+          },
+          {
+            label: 'Collected',
+            value: formatCurrency(totals.collected),
+            color: 'text-blue-600',
+          },
+          {
+            label: 'Pending',
+            value: formatCurrency(totals.pending),
+            color: 'text-warning',
+          },
           { label: 'Bills', value: String(totals.bills), color: 'text-ink' },
         ].map(({ label, value, color }) => (
           <Card key={label}>
@@ -68,29 +87,47 @@ export function ReportsPage() {
         ))}
       </div>
 
-      {loading && <div className="flex justify-center py-8"><Spinner className="w-8 h-8" /></div>}
+      {loading && (
+        <div className="flex justify-center py-8">
+          <Spinner className="w-8 h-8" />
+        </div>
+      )}
 
       {!loading && summaries.length === 0 && (
-        <EmptyState icon={<BarChart3 size={40} />} title="No data yet" description="Bills will show up here" />
+        <EmptyState
+          icon={<BarChart3 size={40} />}
+          title="No data yet"
+          description="Bills will show up here"
+        />
       )}
 
       {/* Daily breakdown */}
-      <p className="text-xs font-semibold text-ink-muted uppercase tracking-wide mb-3">Daily Breakdown</p>
+      <p className="text-xs font-semibold text-ink-muted uppercase tracking-wide mb-3">
+        Daily Breakdown
+      </p>
       <div className="flex flex-col gap-3">
-        {summaries.map(s => (
+        {summaries.map((s) => (
           <Card key={s.date}>
             <div className="flex justify-between items-start mb-2">
-              <p className="font-medium text-ink text-sm">{formatDate(s.date + 'T00:00:00.000Z')}</p>
-              <p className="font-bold text-ink">{formatCurrency(s.totalRevenue)}</p>
+              <p className="font-medium text-ink text-sm">
+                {formatDate(s.date + 'T00:00:00.000Z')}
+              </p>
+              <p className="font-bold text-ink">
+                {formatCurrency(s.totalRevenue)}
+              </p>
             </div>
             <div className="flex gap-3 text-xs text-ink-muted">
               <span>{s.totalBills} bills</span>
               <span>·</span>
-              <span className="text-primary-600">↑ {formatCurrency(s.totalCollected)} collected</span>
+              <span className="text-primary-600">
+                ↑ {formatCurrency(s.totalCollected)} collected
+              </span>
               {s.totalPending > 0 && (
                 <>
                   <span>·</span>
-                  <span className="text-warning">{formatCurrency(s.totalPending)} pending</span>
+                  <span className="text-warning">
+                    {formatCurrency(s.totalPending)} pending
+                  </span>
                 </>
               )}
             </div>
@@ -98,5 +135,5 @@ export function ReportsPage() {
         ))}
       </div>
     </div>
-  )
+  );
 }

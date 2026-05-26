@@ -13,95 +13,8 @@ import { BillsPage } from '@/pages/BillsPage'
 import { ReportsPage } from '@/pages/ReportsPage'
 import { PendingApprovalsPage } from '@/pages/PendingApprovalsPage'
 import { UsersPage } from '@/pages/UsersPage'
-
-/**
- * App — composes providers and routes.
- * Single Responsibility: routing and layout only.
- *
- * Route access matrix:
- * /login           → public
- * /dashboard       → all authenticated
- * /billing         → admin, cashier
- * /products        → all authenticated (admin can edit)
- * /bills           → all authenticated
- * /reports         → admin only
- * /payments/pending → admin only
- * /users           → admin only
- */
-function AppRoutes() {
-  return (
-    <Routes>
-      {/* Public */}
-      <Route path="/login" element={<LoginPage />} />
-
-      {/* Protected — all roles */}
-      <Route
-        path="/dashboard"
-        element={
-          <ProtectedRoute>
-            <AppShell><DashboardPage /></AppShell>
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/bills"
-        element={
-          <ProtectedRoute>
-            <AppShell><BillsPage /></AppShell>
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/products"
-        element={
-          <ProtectedRoute>
-            <AppShell><ProductsPage /></AppShell>
-          </ProtectedRoute>
-        }
-      />
-
-      {/* Protected — cashier + admin */}
-      <Route
-        path="/billing"
-        element={
-          <ProtectedRoute allowedRoles={['admin', 'cashier']}>
-            <AppShell><BillingPage /></AppShell>
-          </ProtectedRoute>
-        }
-      />
-
-      {/* Protected — admin only */}
-      <Route
-        path="/reports"
-        element={
-          <ProtectedRoute allowedRoles={['admin']}>
-            <AppShell><ReportsPage /></AppShell>
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/payments/pending"
-        element={
-          <ProtectedRoute allowedRoles={['admin']}>
-            <AppShell><PendingApprovalsPage /></AppShell>
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/users"
-        element={
-          <ProtectedRoute allowedRoles={['admin']}>
-            <AppShell><UsersPage /></AppShell>
-          </ProtectedRoute>
-        }
-      />
-
-      {/* Fallback */}
-      <Route path="/" element={<Navigate to="/dashboard" replace />} />
-      <Route path="*" element={<Navigate to="/dashboard" replace />} />
-    </Routes>
-  )
-}
+import { NoStorePage } from '@/pages/NoStorePage'
+import { StoreManagementPage } from '@/pages/StoreManagementPage'
 
 export default function App() {
   return (
@@ -109,16 +22,62 @@ export default function App() {
       <AuthProvider>
         <CartProvider>
           <UpdateBanner />
-          <AppRoutes />
+          <Routes>
+            {/* Public */}
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/no-store" element={<NoStorePage />} />
+
+            {/* All authenticated */}
+            <Route path="/dashboard" element={
+              <ProtectedRoute><AppShell><DashboardPage /></AppShell></ProtectedRoute>
+            } />
+            <Route path="/bills" element={
+              <ProtectedRoute><AppShell><BillsPage /></AppShell></ProtectedRoute>
+            } />
+            <Route path="/products" element={
+              <ProtectedRoute><AppShell><ProductsPage /></AppShell></ProtectedRoute>
+            } />
+
+            {/* Cashier + store + admin */}
+            <Route path="/billing" element={
+              <ProtectedRoute allowedRoles={['admin', 'store', 'cashier']}>
+                <AppShell><BillingPage /></AppShell>
+              </ProtectedRoute>
+            } />
+
+            {/* Store manager + admin */}
+            <Route path="/reports" element={
+              <ProtectedRoute allowedRoles={['admin', 'store']}>
+                <AppShell><ReportsPage /></AppShell>
+              </ProtectedRoute>
+            } />
+            <Route path="/payments/pending" element={
+              <ProtectedRoute allowedRoles={['admin', 'store']}>
+                <AppShell><PendingApprovalsPage /></AppShell>
+              </ProtectedRoute>
+            } />
+
+            {/* Admin only */}
+            <Route path='/stores' element={
+              <ProtectedRoute allowedRoles={['admin']}>
+                <AppShell><StoreManagementPage /></AppShell>
+              </ProtectedRoute>
+            } />
+            <Route path="/users" element={
+              <ProtectedRoute allowedRoles={['admin']}>
+                <AppShell><UsersPage /></AppShell>
+              </ProtectedRoute>
+            } />
+
+            <Route path="/" element={<Navigate to="/dashboard" replace />} />
+            <Route path="*" element={<Navigate to="/dashboard" replace />} />
+          </Routes>
+
           <Toaster
             position="top-center"
             toastOptions={{
               duration: 3000,
-              style: {
-                borderRadius: '12px',
-                fontSize: '14px',
-                fontFamily: 'DM Sans, sans-serif',
-              },
+              style: { borderRadius: '12px', fontSize: '14px', fontFamily: 'DM Sans, sans-serif' },
             }}
           />
         </CartProvider>

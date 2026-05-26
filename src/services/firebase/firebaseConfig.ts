@@ -1,11 +1,7 @@
-import { initializeApp, getApps } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import { initializeApp, getApps } from 'firebase/app'
+import { getAuth } from 'firebase/auth'
+import { getFirestore } from 'firebase/firestore'
 
-/**
- * Replace these values with your own from:
- * Firebase Console → Project Settings → Your apps → SDK setup and configuration
- */
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
@@ -13,21 +9,35 @@ const firebaseConfig = {
   storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
   messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
   appId: import.meta.env.VITE_FIREBASE_APP_ID,
-};
+}
 
-// Prevent re-initialization during hot module reload
-const app =
-  getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
+const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0]
 
-export const auth = getAuth(app);
-export const db = getFirestore(app);
+export const auth = getAuth(app)
+export const db = getFirestore(app)
 
-// Firestore collection names — single source of truth
+/**
+ * Firestore data model (multi-store):
+ *
+ * /meta/admin_exists          — first-user sentinel
+ * /users/{uid}                — user profiles (global)
+ * /stores/{storeId}           — store records
+ * /stores/{storeId}/products  — store-scoped products
+ * /stores/{storeId}/bills     — store-scoped bills
+ * /stores/{storeId}/payments  — store-scoped payments
+ * /stores/{storeId}/counters  — bill number counters
+ */
 export const COLLECTIONS = {
+  META: 'meta',
   USERS: 'users',
+  STORES: 'stores',
+  // Sub-collections under /stores/{storeId}/
   PRODUCTS: 'products',
   BILLS: 'bills',
   PAYMENTS: 'payments',
-  COUNTERS: 'counters', // for bill number generation
-  META: 'meta', // for app-wide settings and sentinels
-} as const;
+  COUNTERS: 'counters',
+} as const
+
+/** Helper — returns path to a store sub-collection */
+export const storePath = (storeId: string, sub: 'products' | 'bills' | 'payments' | 'counters') =>
+  `${COLLECTIONS.STORES}/${storeId}/${sub}`

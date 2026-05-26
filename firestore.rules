@@ -17,28 +17,49 @@ service cloud.firestore {
       return isSignedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid));
     }
 
-    function isAdmin() {
-      return userExists() && getUserData().role == 'admin';
+    function getRole() {
+      return userExists() ? getUserData().role : null;
     }
 
-    function isCashier() {
-      return userExists() && (getUserData().role == 'cashier' || getUserData().role == 'admin');
+    function getStoreId() {
+      return userExists() ? getUserData().storeId : null;
     }
 
-    function isActiveUser() {
+    function isActive() {
       return userExists() && getUserData().isActive == true;
+    }
+
+    function isAdmin() {
+      return isActive() && getRole() == 'admin';
+    }
+
+    // store manager or admin
+    function isStoreManager(storeId) {
+      return isActive() && (
+        getRole() == 'admin'
+        || (getRole() == 'store' && getStoreId() == storeId)
+      );
+    }
+
+    // cashier, store manager, or admin — all can create bills
+    function canBill(storeId) {
+      return isActive() && (
+        getRole() == 'admin'
+        || ((getRole() == 'store' || getRole() == 'cashier') && getStoreId() == storeId)
+      );
+    }
+
+    // ── Meta ──────────────────────────────────────────────────────────────────
+
+    match /meta/{docId} {
+      allow read, write: if isSignedIn();
     }
 
     // ── Users ─────────────────────────────────────────────────────────────────
 
     match /users/{uid} {
-      // Anyone signed in can read their own profile
-      allow read: if isSignedIn() && request.auth.uid == uid;
-      // Admins can read all profiles
-      allow read: if isAdmin();
-      // A signed-in user can create ONLY their own profile
+      allow read: if isSignedIn() && (request.auth.uid == uid || isAdmin());
       allow create: if isSignedIn() && request.auth.uid == uid;
-      // User can update their own non-sensitive fields; admin can update anything
       allow update: if isSignedIn() && (
         (request.auth.uid == uid && !('role' in request.resource.data.diff(resource.data).affectedKeys()))
         || isAdmin()
@@ -46,61 +67,49 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    // ── Invite codes ──────────────────────────────────────────────────────────
-    // Used for manual registration flow — admin creates, new user reads once
+    // ── Stores ────────────────────────────────────────────────────────────────
 
-    match /inviteCodes/{code} {
-      // Anyone signed in can read a code to validate it
-      allow read: if isSignedIn();
-      // Only admins can create/delete codes
-      allow create, delete: if isAdmin();
-      allow update: if false;
-    }
-
-    // ── Products ──────────────────────────────────────────────────────────────
-
-    match /products/{productId} {
-      allow read: if isActiveUser();
-      allow create, update, delete: if isActiveUser() && isAdmin();
-    }
-
-    // ── Bills ─────────────────────────────────────────────────────────────────
-
-    match /bills/{billId} {
-      allow read: if isActiveUser() && (
-        isCashier()
-        || resource.data.customerId == request.auth.uid
-      );
-      allow create: if isActiveUser() && isCashier();
-      allow update: if isActiveUser() && isAdmin();
+    match /stores/{storeId} {
+      allow read: if isActive();
+      allow create, update: if isAdmin();
       allow delete: if false;
-    }
 
-    // ── Payments ──────────────────────────────────────────────────────────────
+      // ── Products (sub-collection) ─────────────────────────────────────────
 
-    match /payments/{paymentId} {
-      allow read: if isActiveUser() && (
-        isCashier()
-        || resource.data.registeredByUserId == request.auth.uid
-      );
-      allow create: if isActiveUser();
-      allow update: if isActiveUser() && isAdmin();
-      allow delete: if false;
-    }
+      match /products/{productId} {
+        allow read: if isActive() && (isAdmin() || getStoreId() == storeId);
+        allow create, update, delete: if isStoreManager(storeId);
+      }
 
-    // ── Meta ─────────────────────────────────────────────────────────────────
-    // App-wide sentinel docs (e.g. admin_exists flag)
-    // Any signed-in user can read; only cashiers/admins can write (via upsert)
+      // ── Bills (sub-collection) ────────────────────────────────────────────
 
-    match /meta/{docId} {
-      allow read: if isSignedIn();
-      allow write: if isSignedIn();
-    }
+      match /bills/{billId} {
+        allow read: if isActive() && (
+          canBill(storeId)
+          || resource.data.customerId == request.auth.uid
+        );
+        allow create: if canBill(storeId);
+        allow update: if isStoreManager(storeId);
+        allow delete: if false;
+      }
 
-    // ── Counters ──────────────────────────────────────────────────────────────
+      // ── Payments (sub-collection) ─────────────────────────────────────────
 
-    match /counters/{counterId} {
-      allow read, write: if isActiveUser() && isCashier();
+      match /payments/{paymentId} {
+        allow read: if isActive() && (
+          canBill(storeId)
+          || resource.data.registeredByUserId == request.auth.uid
+        );
+        allow create: if isActive();
+        allow update: if isStoreManager(storeId);
+        allow delete: if false;
+      }
+
+      // ── Counters (sub-collection) ─────────────────────────────────────────
+
+      match /counters/{counterId} {
+        allow read, write: if canBill(storeId);
+      }
     }
   }
 }

@@ -47,6 +47,7 @@ async function upsertAndReturn(
     displayName:
       displayName ?? firebaseUser.displayName ?? firebaseUser.email ?? 'User',
     photoURL: firebaseUser.photoURL,
+    storeId: null,
     createdAt: new Date().toISOString(),
   });
   return result;

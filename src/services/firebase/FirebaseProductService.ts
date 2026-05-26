@@ -1,32 +1,35 @@
 import {
-  collection, doc, getDoc, getDocs, addDoc, updateDoc, deleteDoc,
-  query, where, orderBy, serverTimestamp,
+  collection, doc, getDoc, getDocs, addDoc, updateDoc,
+  query, where, orderBy,
 } from 'firebase/firestore'
-import { db, COLLECTIONS } from './firebaseConfig'
+import { db, storePath } from './firebaseConfig'
 import type { IProductService } from '../interfaces/IProductService'
 import type { Product, CreateProductInput, UpdateProductInput, ServiceResult } from '@/types'
+import { fuzzySearch } from '@/utils/fuzzySearch'
 
 export class FirebaseProductService implements IProductService {
-  private col = collection(db, COLLECTIONS.PRODUCTS)
+  private col(storeId: string) {
+    return collection(db, storePath(storeId, 'products'))
+  }
 
-  async listProducts(includeInactive = false): Promise<ServiceResult<Product[]>> {
+  async listProducts(storeId: string, includeInactive = false): Promise<ServiceResult<Product[]>> {
     try {
       const q = includeInactive
-        ? query(this.col, orderBy('name'))
-        : query(this.col, where('isActive', '==', true), orderBy('name'))
+        ? query(this.col(storeId), orderBy('name'))
+        : query(this.col(storeId), where('isActive', '==', true), orderBy('name'))
       const snap = await getDocs(q)
-      const products = snap.docs.map(d => ({ id: d.id, ...d.data() }) as Product)
+      const products = snap.docs.map(d => ({ id: d.id, storeId, ...d.data() }) as Product)
       return { success: true, data: products }
     } catch (err) {
       return { success: false, error: (err as Error).message }
     }
   }
 
-  async getProduct(id: string): Promise<ServiceResult<Product | null>> {
+  async getProduct(storeId: string, id: string): Promise<ServiceResult<Product | null>> {
     try {
-      const snap = await getDoc(doc(db, COLLECTIONS.PRODUCTS, id))
+      const snap = await getDoc(doc(db, storePath(storeId, 'products'), id))
       if (!snap.exists()) return { success: true, data: null }
-      return { success: true, data: { id: snap.id, ...snap.data() } as Product }
+      return { success: true, data: { id: snap.id, storeId, ...snap.data() } as Product }
     } catch (err) {
       return { success: false, error: (err as Error).message }
     }
@@ -35,19 +38,20 @@ export class FirebaseProductService implements IProductService {
   async createProduct(input: CreateProductInput): Promise<ServiceResult<Product>> {
     try {
       const now = new Date().toISOString()
-      const data = { ...input, createdAt: now, updatedAt: now, _ts: serverTimestamp() }
-      const ref = await addDoc(this.col, data)
-      return { success: true, data: { id: ref.id, ...input, createdAt: now, updatedAt: now } }
+      const { storeId, ...rest } = input
+      const data = { ...rest, storeId, createdAt: now, updatedAt: now }
+      const ref = await addDoc(this.col(storeId), data)
+      return { success: true, data: { id: ref.id, ...data } as Product }
     } catch (err) {
       return { success: false, error: (err as Error).message }
     }
   }
 
-  async updateProduct(id: string, input: UpdateProductInput): Promise<ServiceResult<Product>> {
+  async updateProduct(storeId: string, id: string, input: UpdateProductInput): Promise<ServiceResult<Product>> {
     try {
       const now = new Date().toISOString()
-      await updateDoc(doc(db, COLLECTIONS.PRODUCTS, id), { ...input, updatedAt: now })
-      const updated = await this.getProduct(id)
+      await updateDoc(doc(db, storePath(storeId, 'products'), id), { ...input, updatedAt: now })
+      const updated = await this.getProduct(storeId, id)
       if (!updated.success || !updated.data) return { success: false, error: 'Product not found after update' }
       return { success: true, data: updated.data }
     } catch (err) {
@@ -55,10 +59,9 @@ export class FirebaseProductService implements IProductService {
     }
   }
 
-  async deleteProduct(id: string): Promise<ServiceResult<void>> {
+  async deleteProduct(storeId: string, id: string): Promise<ServiceResult<void>> {
     try {
-      // Soft delete — preserve billing history
-      await updateDoc(doc(db, COLLECTIONS.PRODUCTS, id), {
+      await updateDoc(doc(db, storePath(storeId, 'products'), id), {
         isActive: false,
         updatedAt: new Date().toISOString(),
       })
@@ -68,18 +71,12 @@ export class FirebaseProductService implements IProductService {
     }
   }
 
-  async searchProducts(query_: string): Promise<ServiceResult<Product[]>> {
-    // Firestore doesn't support full-text search natively.
-    // For v1: fetch all active products and filter client-side.
-    // Future: swap with Algolia/Typesense without changing this interface.
+  async searchProducts(storeId: string, query_: string): Promise<ServiceResult<Product[]>> {
     try {
-      const all = await this.listProducts(false)
+      const all = await this.listProducts(storeId, false)
       if (!all.success) return all
-      const q = query_.toLowerCase()
-      const filtered = all.data.filter(
-        p => p.name.toLowerCase().includes(q) || p.category.toLowerCase().includes(q)
-      )
-      return { success: true, data: filtered }
+      const results = fuzzySearch(all.data, query_)
+      return { success: true, data: results }
     } catch (err) {
       return { success: false, error: (err as Error).message }
     }
